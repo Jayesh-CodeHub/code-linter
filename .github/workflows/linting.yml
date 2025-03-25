@@ -46,31 +46,74 @@ jobs:
       - name: Install Dependencies
         run: |
           case "$language" in
-            python) pip install pylint;;
+            python) pip install pylint flake8 bandit radon;;
             bash) sudo apt-get install -y shellcheck;;
-            powershell) sudo apt-get install -y powershell;;
+            powershell) sudo apt-get install -y powershell PSScriptAnalyzer;;
           esac
 
-      - name: Perform Linting
+      - name: Perform Linting and Security Analysis
         run: |
           mkdir -p reports
           TIMESTAMP=$(date +%s)
           REPORT_FILE="reports/lint_report_${TIMESTAMP}.html"
 
+          # Start HTML structure
+          echo "<html><head><title>Lint Report</title><style>" > "$REPORT_FILE"
+          echo "body { font-family: Arial, sans-serif; padding: 20px; } h1, h2 { color: #007bff; } pre { background: #f4f4f4; padding: 10px; border-radius: 5px; }" >> "$REPORT_FILE"
+          echo "</style></head><body>" >> "$REPORT_FILE"
+          echo "<h1>Lint and Security Analysis Report</h1>" >> "$REPORT_FILE"
+          echo "<p>Generated on: $(date)</p>" >> "$REPORT_FILE"
+
           case "$language" in
             python)
-              pylint extracted_code/**/*.py --output-format=parseable | tee "$REPORT_FILE"
+              echo "<h2>Python Code Analysis</h2>" >> "$REPORT_FILE"
+
+              # Pylint Report
+              echo "<h3>Pylint Report</h3><pre>" >> "$REPORT_FILE"
+              pylint extracted_code/**/*.py --output-format=parseable | tee -a "$REPORT_FILE"
+              echo "</pre>" >> "$REPORT_FILE"
+
+              # Flake8 Report
+              echo "<h3>Flake8 Report</h3><pre>" >> "$REPORT_FILE"
+              flake8 extracted_code/**/*.py --format=default | tee -a "$REPORT_FILE"
+              echo "</pre>" >> "$REPORT_FILE"
+
+              # Bandit Security Report
+              echo "<h3>Security Analysis (Bandit)</h3><pre>" >> "$REPORT_FILE"
+              bandit -r extracted_code/**/*.py | tee -a "$REPORT_FILE"
+              echo "</pre>" >> "$REPORT_FILE"
+
+              # Radon Complexity Report
+              echo "<h3>Code Complexity (Radon)</h3><pre>" >> "$REPORT_FILE"
+              radon cc extracted_code/**/*.py -a | tee -a "$REPORT_FILE"
+              echo "</pre>" >> "$REPORT_FILE"
               ;;
+            
             bash)
-              find extracted_code -type f -name "*.sh" -exec shellcheck {} + | tee "$REPORT_FILE"
+              echo "<h2>Bash Code Analysis</h2>" >> "$REPORT_FILE"
+
+              # ShellCheck Report
+              echo "<h3>ShellCheck Report</h3><pre>" >> "$REPORT_FILE"
+              find extracted_code -type f -name "*.sh" -exec shellcheck {} + | tee -a "$REPORT_FILE"
+              echo "</pre>" >> "$REPORT_FILE"
               ;;
+            
             powershell)
-              pwsh -Command "Get-ChildItem -Path extracted_code -Recurse -Filter '*.ps1' | Invoke-ScriptAnalyzer | ConvertTo-Html | Out-File $REPORT_FILE"
+              echo "<h2>PowerShell Code Analysis</h2>" >> "$REPORT_FILE"
+
+              # PowerShell Linting
+              echo "<h3>PSScriptAnalyzer Report</h3><pre>" >> "$REPORT_FILE"
+              pwsh -Command "Get-ChildItem -Path extracted_code -Recurse -Filter '*.ps1' | Invoke-ScriptAnalyzer | Format-Table -AutoSize" | tee -a "$REPORT_FILE"
+              echo "</pre>" >> "$REPORT_FILE"
               ;;
+            
             *)
-              echo "<html><body><h2>No supported language found.</h2></body></html>" > "$REPORT_FILE"
+              echo "<h2>No supported language found.</h2>" >> "$REPORT_FILE"
               ;;
           esac
+
+          # Close HTML structure
+          echo "</body></html>" >> "$REPORT_FILE"
 
       - name: Commit and Push Report
         run: |
