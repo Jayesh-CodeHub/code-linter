@@ -25,31 +25,32 @@ jobs:
         run: |
           unzip -o "$latest_zip" -d extracted
           mkdir -p extracted_code
-          find extracted -type d -name "masterbot" -o -name "microbots" | while read dir; do
-            cp -r "$dir" extracted_code/
-          done
+          cp -r extracted/**/masterbot extracted_code/ || echo "No masterbot directory found"
+          cp -r extracted/**/microbots extracted_code/ || echo "No microbots directory found"
 
-      - name: Detect Language
-        id: detect_language
+      - name: Detect Languages
         run: |
-          cd extracted_code
-          if find . -type f -name "*.py" | grep -q .; then
-            echo "language=python" >> $GITHUB_ENV
-          elif find . -type f -name "*.sh" | grep -q .; then
-            echo "language=bash" >> $GITHUB_ENV
-          elif find . -type f -name "*.ps1" | grep -q .; then
-            echo "language=powershell" >> $GITHUB_ENV
-          else
-            echo "language=unknown" >> $GITHUB_ENV
+          if find extracted_code -type f -name "*.py" | grep -q .; then
+            echo "python_detected=true" >> $GITHUB_ENV
+          fi
+          if find extracted_code -type f -name "*.sh" | grep -q .; then
+            echo "bash_detected=true" >> $GITHUB_ENV
+          fi
+          if find extracted_code -type f -name "*.ps1" | grep -q .; then
+            echo "powershell_detected=true" >> $GITHUB_ENV
           fi
 
       - name: Install Dependencies
         run: |
-          case "$language" in
-            python) pip install pylint flake8 bandit radon;;
-            bash) sudo apt-get install -y shellcheck;;
-            powershell) sudo apt-get install -y powershell PSScriptAnalyzer;;
-          esac
+          if [[ "$python_detected" == "true" ]]; then
+            pip install pylint flake8 bandit radon
+          fi
+          if [[ "$bash_detected" == "true" ]]; then
+            sudo apt-get install -y shellcheck
+          fi
+          if [[ "$powershell_detected" == "true" ]]; then
+            sudo apt-get install -y powershell PSScriptAnalyzer
+          fi
 
       - name: Perform Linting and Security Analysis
         run: |
@@ -64,55 +65,39 @@ jobs:
           echo "<h1>Lint and Security Analysis Report</h1>" >> "$REPORT_FILE"
           echo "<p>Generated on: $(date)</p>" >> "$REPORT_FILE"
 
-          case "$language" in
-            python)
-              echo "<h2>Python Code Analysis</h2>" >> "$REPORT_FILE"
+          if [[ "$python_detected" == "true" ]]; then
+            echo "<h2>Python Code Analysis</h2>" >> "$REPORT_FILE"
+            echo "<h3>Pylint Report</h3><pre>" >> "$REPORT_FILE"
+            pylint extracted_code/**/*.py --output-format=parseable 2>&1 | tee -a "$REPORT_FILE"
+            echo "</pre>" >> "$REPORT_FILE"
 
-              # Pylint Report
-              echo "<h3>Pylint Report</h3><pre>" >> "$REPORT_FILE"
-              pylint extracted_code/**/*.py --output-format=parseable | tee -a "$REPORT_FILE"
-              echo "</pre>" >> "$REPORT_FILE"
+            echo "<h3>Flake8 Report</h3><pre>" >> "$REPORT_FILE"
+            flake8 extracted_code/**/*.py --format=default 2>&1 | tee -a "$REPORT_FILE"
+            echo "</pre>" >> "$REPORT_FILE"
 
-              # Flake8 Report
-              echo "<h3>Flake8 Report</h3><pre>" >> "$REPORT_FILE"
-              flake8 extracted_code/**/*.py --format=default | tee -a "$REPORT_FILE"
-              echo "</pre>" >> "$REPORT_FILE"
+            echo "<h3>Security Analysis (Bandit)</h3><pre>" >> "$REPORT_FILE"
+            bandit -r extracted_code/**/*.py 2>&1 | tee -a "$REPORT_FILE"
+            echo "</pre>" >> "$REPORT_FILE"
 
-              # Bandit Security Report
-              echo "<h3>Security Analysis (Bandit)</h3><pre>" >> "$REPORT_FILE"
-              bandit -r extracted_code/**/*.py | tee -a "$REPORT_FILE"
-              echo "</pre>" >> "$REPORT_FILE"
+            echo "<h3>Code Complexity (Radon)</h3><pre>" >> "$REPORT_FILE"
+            radon cc extracted_code/**/*.py -a 2>&1 | tee -a "$REPORT_FILE"
+            echo "</pre>" >> "$REPORT_FILE"
+          fi
 
-              # Radon Complexity Report
-              echo "<h3>Code Complexity (Radon)</h3><pre>" >> "$REPORT_FILE"
-              radon cc extracted_code/**/*.py -a | tee -a "$REPORT_FILE"
-              echo "</pre>" >> "$REPORT_FILE"
-              ;;
-            
-            bash)
-              echo "<h2>Bash Code Analysis</h2>" >> "$REPORT_FILE"
+          if [[ "$bash_detected" == "true" ]]; then
+            echo "<h2>Bash Code Analysis</h2>" >> "$REPORT_FILE"
+            echo "<h3>ShellCheck Report</h3><pre>" >> "$REPORT_FILE"
+            find extracted_code -type f -name "*.sh" -exec shellcheck {} + 2>&1 | tee -a "$REPORT_FILE"
+            echo "</pre>" >> "$REPORT_FILE"
+          fi
 
-              # ShellCheck Report
-              echo "<h3>ShellCheck Report</h3><pre>" >> "$REPORT_FILE"
-              find extracted_code -type f -name "*.sh" -exec shellcheck {} + | tee -a "$REPORT_FILE"
-              echo "</pre>" >> "$REPORT_FILE"
-              ;;
-            
-            powershell)
-              echo "<h2>PowerShell Code Analysis</h2>" >> "$REPORT_FILE"
+          if [[ "$powershell_detected" == "true" ]]; then
+            echo "<h2>PowerShell Code Analysis</h2>" >> "$REPORT_FILE"
+            echo "<h3>PSScriptAnalyzer Report</h3><pre>" >> "$REPORT_FILE"
+            pwsh -Command "Get-ChildItem -Path extracted_code -Recurse -Filter '*.ps1' | Invoke-ScriptAnalyzer | Format-Table -AutoSize" 2>&1 | tee -a "$REPORT_FILE"
+            echo "</pre>" >> "$REPORT_FILE"
+          fi
 
-              # PowerShell Linting
-              echo "<h3>PSScriptAnalyzer Report</h3><pre>" >> "$REPORT_FILE"
-              pwsh -Command "Get-ChildItem -Path extracted_code -Recurse -Filter '*.ps1' | Invoke-ScriptAnalyzer | Format-Table -AutoSize" | tee -a "$REPORT_FILE"
-              echo "</pre>" >> "$REPORT_FILE"
-              ;;
-            
-            *)
-              echo "<h2>No supported language found.</h2>" >> "$REPORT_FILE"
-              ;;
-          esac
-
-          # Close HTML structure
           echo "</body></html>" >> "$REPORT_FILE"
 
       - name: Commit and Push Report
@@ -123,5 +108,5 @@ jobs:
           git config --global user.name 'github-actions'
           git config --global user.email 'github-actions@github.com'
           git add reports_dir/
-          git commit -m "Add lint report for latest zip"
-          git push origin $branch_name
+          git commit -m "Add lint report for latest zip" || echo "No changes to commit"
+          git push origin $branch_name || echo "No changes to push"
