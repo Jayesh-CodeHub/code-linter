@@ -53,7 +53,6 @@ jobs:
             pwsh -Command "Install-Module -Name PSScriptAnalyzer -Force -Scope CurrentUser"
           fi
 
-
       - name: Perform Linting and Security Analysis
         run: |
           mkdir -p reports
@@ -96,7 +95,7 @@ jobs:
           if [[ "$powershell_detected" == "true" ]]; then
             echo "<h2>PowerShell Code Analysis</h2>" >> "$REPORT_FILE"
             echo "<h3>PSScriptAnalyzer Report</h3><pre>" >> "$REPORT_FILE"
-            pwsh -Command "Get-ChildItem -Path extracted_code -Recurse -Filter '*.ps1' | Invoke-ScriptAnalyzer | Format-Table -AutoSize" 2>&1 | tee -a "$REPORT_FILE"
+            pwsh -Command "Get-ChildItem -Path extracted_code -Recurse -Filter '*.ps1' | Invoke-ScriptAnalyzer | ForEach-Object { '\n' + ($_ | Out-String) }" 2>&1 | tee -a "$REPORT_FILE"
             echo "</pre>" >> "$REPORT_FILE"
           fi
 
