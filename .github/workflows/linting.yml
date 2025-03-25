@@ -1,0 +1,64 @@
+name: Lint and Analyze Code from ZIP
+
+on:
+  push:
+    paths:
+      - "**.zip"
+
+jobs:
+  process-zip:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Find Latest Zip File
+        id: find_zip
+        run: |
+          latest_zip=$(ls -t | grep '\.zip$' | head -n 1)
+          echo "latest_zip=$latest_zip" >> $GITHUB_ENV
+
+      - name: Unzip and Extract Relevant Folders
+        run: |
+          unzip -o "$latest_zip" -d extracted
+          mkdir -p extracted_code
+          mv extracted/masterbot extracted/microbots extracted_code/ 2>/dev/null || true
+
+      - name: Detect Language
+        id: detect_language
+        run: |
+          cd extracted_code
+          if ls masterbot/*.py microbots/*.py &>/dev/null; then
+            echo "language=python" >> $GITHUB_ENV
+          elif ls masterbot/*.sh microbots/*.sh &>/dev/null; then
+            echo "language=bash" >> $GITHUB_ENV
+          elif ls masterbot/*.ps1 microbots/*.ps1 &>/dev/null; then
+            echo "language=powershell" >> $GITHUB_ENV
+          else
+            echo "language=unknown" >> $GITHUB_ENV
+          fi
+
+      - name: Install Dependencies
+        run: |
+          if [ "$language" == "python" ]; then pip install pylint;
+          elif [ "$language" == "bash" ]; then sudo apt-get install -y shellcheck;
+          elif [ "$language" == "powershell" ]; then sudo apt-get install -y powershell; fi
+
+      - name: Perform Linting
+        run: |
+          mkdir -p reports
+          if [ "$language" == "python" ]; then pylint extracted_code/*/*.py --output-format=html > reports/lint_report.html;
+          elif [ "$language" == "bash" ]; then shellcheck extracted_code/*/*.sh > reports/lint_report.html;
+          elif [ "$language" == "powershell" ]; then pwsh -Command "Invoke-ScriptAnalyzer -Path extracted_code/*/*.ps1 | ConvertTo-Html | Out-File reports/lint_report.html";
+          else echo "No supported language found." > reports/lint_report.html; fi
+
+      - name: Commit and Push Report
+        run: |
+          branch_name=${{ github.ref_name }}
+          mkdir -p reports_dir/$branch_name
+          mv reports/lint_report.html reports_dir/$branch_name/lint_report_$(date +%s).html
+          git config --global user.name 'github-actions'
+          git config --global user.email 'github-actions@github.com'
+          git add reports_dir/
+          git commit -m "Add lint report for latest zip"
+          git push origin $branch_name
