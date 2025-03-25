@@ -4,8 +4,10 @@ on:
   push:
     paths:
       - "**.zip"
+
 permissions:
   contents: write
+
 jobs:
   process-zip:
     runs-on: ubuntu-latest
@@ -23,17 +25,19 @@ jobs:
         run: |
           unzip -o "$latest_zip" -d extracted
           mkdir -p extracted_code
-          mv extracted/masterbot extracted/microbots extracted_code/ 2>/dev/null || true
+          find extracted -type d -name "masterbot" -o -name "microbots" | while read dir; do
+            cp -r "$dir" extracted_code/
+          done
 
       - name: Detect Language
         id: detect_language
         run: |
           cd extracted_code
-          if ls masterbot/*.py microbots/*.py &>/dev/null; then
+          if find . -type f -name "*.py" | grep -q .; then
             echo "language=python" >> $GITHUB_ENV
-          elif ls masterbot/*.sh microbots/*.sh &>/dev/null; then
+          elif find . -type f -name "*.sh" | grep -q .; then
             echo "language=bash" >> $GITHUB_ENV
-          elif ls masterbot/*.ps1 microbots/*.ps1 &>/dev/null; then
+          elif find . -type f -name "*.ps1" | grep -q .; then
             echo "language=powershell" >> $GITHUB_ENV
           else
             echo "language=unknown" >> $GITHUB_ENV
@@ -41,23 +45,38 @@ jobs:
 
       - name: Install Dependencies
         run: |
-          if [ "$language" == "python" ]; then pip install pylint;
-          elif [ "$language" == "bash" ]; then sudo apt-get install -y shellcheck;
-          elif [ "$language" == "powershell" ]; then sudo apt-get install -y powershell; fi
+          case "$language" in
+            python) pip install pylint;;
+            bash) sudo apt-get install -y shellcheck;;
+            powershell) sudo apt-get install -y powershell;;
+          esac
 
       - name: Perform Linting
         run: |
           mkdir -p reports
-          if [ "$language" == "python" ]; then pylint extracted_code/*/*.py --output-format=html > reports/lint_report.html;
-          elif [ "$language" == "bash" ]; then shellcheck extracted_code/*/*.sh > reports/lint_report.html;
-          elif [ "$language" == "powershell" ]; then pwsh -Command "Invoke-ScriptAnalyzer -Path extracted_code/*/*.ps1 | ConvertTo-Html | Out-File reports/lint_report.html";
-          else echo "No supported language found." > reports/lint_report.html; fi
+          TIMESTAMP=$(date +%s)
+          REPORT_FILE="reports/lint_report_${TIMESTAMP}.html"
+
+          case "$language" in
+            python)
+              pylint extracted_code/**/*.py --output-format=parseable | tee "$REPORT_FILE"
+              ;;
+            bash)
+              find extracted_code -type f -name "*.sh" -exec shellcheck {} + | tee "$REPORT_FILE"
+              ;;
+            powershell)
+              pwsh -Command "Get-ChildItem -Path extracted_code -Recurse -Filter '*.ps1' | Invoke-ScriptAnalyzer | ConvertTo-Html | Out-File $REPORT_FILE"
+              ;;
+            *)
+              echo "<html><body><h2>No supported language found.</h2></body></html>" > "$REPORT_FILE"
+              ;;
+          esac
 
       - name: Commit and Push Report
         run: |
           branch_name=${{ github.ref_name }}
           mkdir -p reports_dir/$branch_name
-          mv reports/lint_report.html reports_dir/$branch_name/lint_report_$(date +%s).html
+          mv reports/lint_report_*.html reports_dir/$branch_name/
           git config --global user.name 'github-actions'
           git config --global user.email 'github-actions@github.com'
           git add reports_dir/
