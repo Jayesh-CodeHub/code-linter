@@ -49,8 +49,10 @@ jobs:
             sudo apt-get install -y shellcheck
           fi
           if [[ "$powershell_detected" == "true" ]]; then
-            sudo apt-get install -y powershell PSScriptAnalyzer
+            sudo apt-get install -y powershell
+            pwsh -Command "Install-Module -Name PSScriptAnalyzer -Force -Scope CurrentUser"
           fi
+
 
       - name: Perform Linting and Security Analysis
         run: |
