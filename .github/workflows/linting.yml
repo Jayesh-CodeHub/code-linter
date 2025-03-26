@@ -95,7 +95,11 @@ jobs:
           if [[ "$powershell_detected" == "true" ]]; then
             echo "<h2>PowerShell Code Analysis</h2>" >> "$REPORT_FILE"
             echo "<h3>PSScriptAnalyzer Report</h3><pre>" >> "$REPORT_FILE"
-            pwsh -Command "Get-ChildItem -Path extracted_code -Recurse -Filter '*.ps1' | Invoke-ScriptAnalyzer | ForEach-Object { '\n' + ($_ | Out-String) }" 2>&1 | tee -a "$REPORT_FILE"
+            pwsh -NoProfile -Command "
+              Get-ChildItem -Path extracted_code -Recurse -Filter '*.ps1' |
+              Invoke-ScriptAnalyzer -Severity Warning,Error |
+              ForEach-Object { '`n' + (\$_ | Format-Table -AutoSize | Out-String) }
+            " 2>&1 | tee -a "$REPORT_FILE"
             echo "</pre>" >> "$REPORT_FILE"
           fi
 
