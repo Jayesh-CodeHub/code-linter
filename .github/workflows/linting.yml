@@ -18,42 +18,53 @@ jobs:
       - name: Find Latest Zip File
         id: find_zip
         run: |
-          latest_zip=$(ls -t | grep '\.zip$' | head -n 1)
+          latest_zip=$(find . -maxdepth 1 -type f -name "*.zip" -print0 | xargs -0 ls -t | head -n 1)
+          if [ -z "$latest_zip" ]; then
+            echo "No zip file found. Skipping analysis."
+            exit 0
+          fi
           echo "latest_zip=$latest_zip" >> $GITHUB_ENV
 
       - name: Unzip and Extract Relevant Folders
         run: |
+          mkdir -p extracted extracted_code
           unzip -o "$latest_zip" -d extracted
-          mkdir -p extracted_code
-          cp -r extracted/**/masterbot extracted_code/ || echo "No masterbot directory found"
-          cp -r extracted/**/microbots extracted_code/ || echo "No microbots directory found"
+          find extracted -type d \( -name "masterbot" -o -name "microbots" \) -exec cp -r {} extracted_code/ \; || true
 
       - name: Detect Languages
         run: |
-          if find extracted_code -type f -name "*.py" | grep -q .; then
+          python_files=$(find extracted_code -type f -name "*.py")
+          bash_files=$(find extracted_code -type f -name "*.sh")
+          powershell_files=$(find extracted_code -type f -name "*.ps1")
+
+          if [ -n "$python_files" ]; then
             echo "python_detected=true" >> $GITHUB_ENV
           fi
-          if find extracted_code -type f -name "*.sh" | grep -q .; then
+          if [ -n "$bash_files" ]; then
             echo "bash_detected=true" >> $GITHUB_ENV
           fi
-          if find extracted_code -type f -name "*.ps1" | grep -q .; then
+          if [ -n "$powershell_files" ]; then
             echo "powershell_detected=true" >> $GITHUB_ENV
           fi
 
       - name: Install Dependencies
         run: |
-          if [[ "$python_detected" == "true" ]]; then
+          if [ "$python_detected" = "true" ]; then
             pip install pylint flake8 bandit radon
           fi
-          if [[ "$bash_detected" == "true" ]]; then
+          if [ "$bash_detected" = "true" ]; then
+            sudo apt-get update
             sudo apt-get install -y shellcheck
           fi
-          if [[ "$powershell_detected" == "true" ]]; then
+          if [ "$powershell_detected" = "true" ]; then
+            sudo apt-get update
             sudo apt-get install -y powershell
             pwsh -Command "Install-Module -Name PSScriptAnalyzer -Force -Scope CurrentUser"
           fi
 
       - name: Perform Linting and Security Analysis
+        # Changed to continue-on-error to ensure the workflow always generates a report
+        continue-on-error: true
         run: |
           mkdir -p reports
           TIMESTAMP=$(date +%s)
@@ -65,33 +76,33 @@ jobs:
           echo "<h1>Lint and Security Analysis Report</h1>" >> "$REPORT_FILE"
           echo "<p>Generated on: $(date)</p>" >> "$REPORT_FILE"
 
-          if [[ "$python_detected" == "true" ]]; then
+          if [ "$python_detected" = "true" ]; then
             echo "<h2>Python Code Analysis</h2>" >> "$REPORT_FILE"
             echo "<h3>Pylint Report</h3><pre>" >> "$REPORT_FILE"
-            pylint extracted_code/**/*.py --output-format=parseable 2>&1 | tee -a "$REPORT_FILE" || true
+            find extracted_code -type f -name "*.py" -print0 | xargs -0 pylint --output-format=parseable 2>&1 | tee -a "$REPORT_FILE" || true
             echo "</pre>" >> "$REPORT_FILE"
 
             echo "<h3>Flake8 Report</h3><pre>" >> "$REPORT_FILE"
-            flake8 extracted_code/**/*.py --format=default 2>&1 | tee -a "$REPORT_FILE" || true
+            find extracted_code -type f -name "*.py" -print0 | xargs -0 flake8 --format=default 2>&1 | tee -a "$REPORT_FILE" || true
             echo "</pre>" >> "$REPORT_FILE"
 
             echo "<h3>Security Analysis (Bandit)</h3><pre>" >> "$REPORT_FILE"
-            bandit -r extracted_code/**/*.py 2>&1 | tee -a "$REPORT_FILE" || true
+            bandit -r extracted_code -f html -o reports/bandit_report.html 2>&1 | tee -a "$REPORT_FILE" || true
             echo "</pre>" >> "$REPORT_FILE"
 
             echo "<h3>Code Complexity (Radon)</h3><pre>" >> "$REPORT_FILE"
-            radon cc extracted_code/**/*.py -a 2>&1 | tee -a "$REPORT_FILE" || true
+            find extracted_code -type f -name "*.py" -print0 | xargs -0 radon cc -a 2>&1 | tee -a "$REPORT_FILE" || true
             echo "</pre>" >> "$REPORT_FILE"
           fi
 
-          if [[ "$bash_detected" == "true" ]]; then
+          if [ "$bash_detected" = "true" ]; then
             echo "<h2>Bash Code Analysis</h2>" >> "$REPORT_FILE"
             echo "<h3>ShellCheck Report</h3><pre>" >> "$REPORT_FILE"
-            find extracted_code -type f -name "*.sh" -exec shellcheck {} + 2>&1 | tee -a "$REPORT_FILE" || true
+            find extracted_code -type f -name "*.sh" -print0 | xargs -0 shellcheck 2>&1 | tee -a "$REPORT_FILE" || true
             echo "</pre>" >> "$REPORT_FILE"
           fi
 
-          if [[ "$powershell_detected" == "true" ]]; then
+          if [ "$powershell_detected" = "true" ]; then
             echo "<h2>PowerShell Code Analysis</h2>" >> "$REPORT_FILE"
             echo "<h3>PSScriptAnalyzer Report</h3><pre>" >> "$REPORT_FILE"
             pwsh -NoProfile -Command "
@@ -105,12 +116,14 @@ jobs:
           echo "</body></html>" >> "$REPORT_FILE"
 
       - name: Commit and Push Report
+        # Ensure this step runs even if previous steps fail
+        if: always()
         run: |
-          branch_name=${{ github.ref_name }}
-          mkdir -p reports_dir/$branch_name
-          mv reports/lint_report_*.html reports_dir/$branch_name/
+          branch_name="${{ github.ref_name }}"
+          mkdir -p reports_dir/"$branch_name"
+          mv reports/lint_report_*.html reports_dir/"$branch_name"/ || true
           git config --global user.name 'github-actions'
           git config --global user.email 'github-actions@github.com'
-          git add reports_dir/
+          git add reports_dir/ || true
           git commit -m "Add lint report for latest zip" || echo "No changes to commit"
-          git push origin $branch_name || echo "No changes to push"
+          git push origin "$branch_name" || echo "No changes to push"
