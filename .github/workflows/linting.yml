@@ -31,6 +31,32 @@ jobs:
           unzip -o "$latest_zip" -d extracted
           find extracted -type d \( -name "masterbot" -o -name "microbots" \) -exec cp -r {} extracted_code/ \; || true
 
+      - name: Verify PowerShell Setup
+        run: |
+          echo "Checking PowerShell Installation"
+          pwsh --version
+          
+          echo "Checking PowerShell Modules"
+          pwsh -Command "Get-Module -ListAvailable PSScriptAnalyzer"
+          
+          echo "Finding PowerShell Files"
+          find extracted_code -type f -name "*.ps1"
+          
+          echo "Attempting Manual PSScriptAnalyzer Scan"
+          pwsh -Command "
+            \$ErrorActionPreference = 'Continue'
+            \$files = Get-ChildItem -Path extracted_code -Recurse -Filter '*.ps1'
+            if (\$files.Count -eq 0) {
+              Write-Host 'No PowerShell files found'
+            } else {
+              Write-Host \"Found \$(\$files.Count) PowerShell files\"
+              \$files | ForEach-Object {
+                Write-Host \"Analyzing: \$(\$_.FullName)\"
+                Invoke-ScriptAnalyzer -Path \$_.FullName -Severity Warning,Error
+              }
+            }
+          "
+
       - name: Detect Languages
         run: |
           python_files=$(find extracted_code -type f -name "*.py")
@@ -63,7 +89,6 @@ jobs:
           fi
 
       - name: Perform Linting and Security Analysis
-        # Changed to continue-on-error to ensure the workflow always generates a report
         continue-on-error: true
         run: |
           mkdir -p reports
@@ -106,9 +131,28 @@ jobs:
             echo "<h2>PowerShell Code Analysis</h2>" >> "$REPORT_FILE"
             echo "<h3>PSScriptAnalyzer Report</h3><pre>" >> "$REPORT_FILE"
             pwsh -NoProfile -Command "
-              Get-ChildItem -Path extracted_code -Recurse -Filter '*.ps1' |
-              Invoke-ScriptAnalyzer -Severity Warning,Error |
-              ForEach-Object { '`n' + (\$_ | Format-Table -AutoSize | Out-String) }
+              \$ErrorActionPreference = 'Continue'
+              \$files = Get-ChildItem -Path extracted_code -Recurse -Filter '*.ps1'
+              if (\$files.Count -eq 0) {
+                Write-Host 'No PowerShell files found'
+              } else {
+                Write-Host \"Found \$(\$files.Count) PowerShell files\"
+                \$results = @()
+                \$files | ForEach-Object {
+                  Write-Host \"Analyzing: \$(\$_.FullName)\"
+                  \$result = Invoke-ScriptAnalyzer -Path \$_.FullName -Severity Warning,Error
+                  if (\$result) {
+                    \$results += \$result | ForEach-Object { 
+                      \"\$(\$_.Severity): \$(\$_.RuleName) in \$(\$_.ScriptName) at line \$(\$_.Line)``n  \$(\$_.Message)\" 
+                    }
+                  }
+                }
+                if (\$results.Count -gt 0) {
+                  \$results | ForEach-Object { Write-Host \$_ }
+                } else {
+                  Write-Host 'No issues found in PowerShell scripts'
+                }
+              }
             " 2>&1 | tee -a "$REPORT_FILE" || true
             echo "</pre>" >> "$REPORT_FILE"
           fi
@@ -116,7 +160,6 @@ jobs:
           echo "</body></html>" >> "$REPORT_FILE"
 
       - name: Commit and Push Report
-        # Ensure this step runs even if previous steps fail
         if: always()
         run: |
           branch_name="${{ github.ref_name }}"
