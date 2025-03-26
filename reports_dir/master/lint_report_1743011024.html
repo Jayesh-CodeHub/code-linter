@@ -1,0 +1,107 @@
+<html><head><title>Lint Report</title><style>
+body { font-family: Arial, sans-serif; padding: 20px; } h1, h2 { color: #007bff; } pre { background: #f4f4f4; padding: 10px; border-radius: 5px; }
+</style></head><body>
+<h1>Lint and Security Analysis Report</h1>
+<p>Generated on: Wed Mar 26 17:43:44 UTC 2025</p>
+<h2>Python Code Analysis</h2>
+<h3>Pylint Report</h3><pre>
+************* Module test
+extracted_code/masterbot/test.py:42: [C0301(line-too-long), ] Line too long (110/100)
+extracted_code/masterbot/test.py:1: [C0114(missing-module-docstring), ] Missing module docstring
+extracted_code/masterbot/test.py:1: [E0401(import-error), ] Unable to import 'paramiko'
+extracted_code/masterbot/test.py:20: [C0116(missing-function-docstring), fetch_api_data] Missing function or method docstring
+extracted_code/masterbot/test.py:21: [W3101(missing-timeout), fetch_api_data] Missing timeout argument for method 'requests.get' can cause your program to hang indefinitely
+extracted_code/masterbot/test.py:22: [R1705(no-else-return), fetch_api_data] Unnecessary "else" after "return", remove the "else" and de-indent the code inside it
+extracted_code/masterbot/test.py:30: [C0116(missing-function-docstring), execute_ssh_command] Missing function or method docstring
+extracted_code/masterbot/test.py:30: [W0621(redefined-outer-name), execute_ssh_command] Redefining name 'command' from outer scope (line 75)
+extracted_code/masterbot/test.py:36: [W0621(redefined-outer-name), execute_ssh_command] Redefining name 'output' from outer scope (line 76)
+extracted_code/masterbot/test.py:35: [W0612(unused-variable), execute_ssh_command] Unused variable 'stdin'
+extracted_code/masterbot/test.py:35: [W0612(unused-variable), execute_ssh_command] Unused variable 'stderr'
+extracted_code/masterbot/test.py:41: [C0116(missing-function-docstring), execute_shell_command] Missing function or method docstring
+extracted_code/masterbot/test.py:41: [W0621(redefined-outer-name), execute_shell_command] Redefining name 'command' from outer scope (line 75)
+extracted_code/masterbot/test.py:42: [W1510(subprocess-run-check), execute_shell_command] 'subprocess.run' used without explicitly defining the value for 'check'.
+extracted_code/masterbot/test.py:46: [C0116(missing-function-docstring), process_data] Missing function or method docstring
+extracted_code/masterbot/test.py:57: [C0116(missing-function-docstring), threaded_function] Missing function or method docstring
+extracted_code/masterbot/test.py:59: [W0612(unused-variable), threaded_function] Unused variable 'i'
+extracted_code/masterbot/test.py:68: [C0116(missing-function-docstring), encrypt_message] Missing function or method docstring
+extracted_code/masterbot/test.py:68: [W0621(redefined-outer-name), encrypt_message] Redefining name 'message' from outer scope (line 85)
+extracted_code/masterbot/test.py:75: [C0103(invalid-name), ] Constant name "command" doesn't conform to UPPER_CASE naming style
+extracted_code/masterbot/test.py:85: [C0103(invalid-name), ] Constant name "message" doesn't conform to UPPER_CASE naming style
+extracted_code/masterbot/test.py:3: [C0411(wrong-import-order), ] standard import "threading" should be placed before third party imports "paramiko", "requests"
+extracted_code/masterbot/test.py:4: [C0411(wrong-import-order), ] standard import "subprocess" should be placed before third party imports "paramiko", "requests"
+extracted_code/masterbot/test.py:5: [C0411(wrong-import-order), ] standard import "os" should be placed before third party imports "paramiko", "requests"
+extracted_code/masterbot/test.py:6: [C0411(wrong-import-order), ] standard import "json" should be placed before third party imports "paramiko", "requests"
+extracted_code/masterbot/test.py:7: [C0411(wrong-import-order), ] standard import "time" should be placed before third party imports "paramiko", "requests"
+extracted_code/masterbot/test.py:8: [C0411(wrong-import-order), ] standard import "logging" should be placed before third party imports "paramiko", "requests"
+extracted_code/masterbot/test.py:5: [W0611(unused-import), ] Unused import os
+
+-----------------------------------
+Your code has been rated at 4.84/10
+
+</pre>
+<h3>Flake8 Report</h3><pre>
+extracted_code/masterbot/test.py:5:1: F401 'os' imported but unused
+extracted_code/masterbot/test.py:17:41: E261 at least two spaces before inline comment
+extracted_code/masterbot/test.py:20:1: E302 expected 2 blank lines, found 1
+extracted_code/masterbot/test.py:30:1: E302 expected 2 blank lines, found 1
+extracted_code/masterbot/test.py:33:80: E501 line too long (91 > 79 characters)
+extracted_code/masterbot/test.py:41:1: E302 expected 2 blank lines, found 1
+extracted_code/masterbot/test.py:42:80: E501 line too long (110 > 79 characters)
+extracted_code/masterbot/test.py:46:1: E302 expected 2 blank lines, found 1
+extracted_code/masterbot/test.py:57:1: E302 expected 2 blank lines, found 1
+extracted_code/masterbot/test.py:68:1: E302 expected 2 blank lines, found 1
+extracted_code/masterbot/test.py:75:1: E305 expected 2 blank lines after class or function definition, found 1
+</pre>
+<h3>Security Analysis (Bandit)</h3><pre>
+[main]	INFO	profile include tests: None
+[main]	INFO	profile exclude tests: None
+[main]	INFO	cli include tests: None
+[main]	INFO	cli exclude tests: None
+[main]	INFO	running on Python 3.12.3
+[html]	INFO	HTML output written to file: reports/bandit_report.html
+</pre>
+<h3>Code Complexity (Radon)</h3><pre>
+extracted_code/masterbot/test.py
+    F 46:0 process_data - A
+    F 57:0 threaded_function - A
+    F 20:0 fetch_api_data - A
+    F 30:0 execute_ssh_command - A
+    F 41:0 execute_shell_command - A
+    F 68:0 encrypt_message - A
+
+6 blocks (classes, functions, methods) analyzed.
+Average complexity: A (2.0)
+</pre>
+<h2>Bash Code Analysis</h2>
+<h3>ShellCheck Report</h3><pre>
+
+In extracted_code/microbots/testing.sh line 24:
+cat /etc/passwd | grep "root" >> $LOGFILE
+    ^---------^ SC2002 (style): Useless cat. Consider 'cmd < file | ..' or 'cmd file | ..' instead.
+
+
+In extracted_code/microbots/testing.sh line 30:
+FILES_COUNT=$(expr `ls -1 $BACKUP_SRC | wc -l` + 1)
+              ^--^ SC2003 (style): expr is antiquated. Consider rewriting this using $((..)), ${} or [[ ]].
+                   ^-------------------------^ SC2046 (warning): Quote this to prevent word splitting.
+                   ^-------------------------^ SC2006 (style): Use $(...) notation instead of legacy backticks `...`.
+                    ^---------------^ SC2012 (info): Use find instead of ls to better handle non-alphanumeric filenames.
+
+Did you mean: 
+FILES_COUNT=$(expr $(ls -1 $BACKUP_SRC | wc -l) + 1)
+
+
+In extracted_code/microbots/testing.sh line 40:
+backup_check {
+             ^-- SC1083 (warning): This { is literal. Check expression (missing ;/\n?) or quote it.
+
+
+In extracted_code/microbots/testing.sh line 46:
+}
+^-- SC1089 (error): Parsing stopped here. Is this keyword correctly matched up?
+
+For more information:
+  https://www.shellcheck.net/wiki/SC1083 -- This { is literal. Check expressi...
+  https://www.shellcheck.net/wiki/SC2046 -- Quote this to prevent word splitt...
+  https://www.shellcheck.net/wiki/SC2012 -- Use find instead of ls to better ...
+</pre>
